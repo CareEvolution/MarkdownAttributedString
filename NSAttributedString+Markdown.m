@@ -32,6 +32,7 @@
 
 #define ALLOW_LINKS 1			// CONFIGURATION - When enabled, inline and automatic links in Markdown will be converted to rich text attributes.
 #define ALLOW_ALTERNATES 1		// CONFIGURATION - When enabled, alternate Markdown such as * for single emphasis and __ for double will be converted.
+#define ALLOW_BULLETED_LISTS 1  // CONFIGURATION - When enabled, bulleted lists are supported using -, * ,or + with 4 spaces per indentation level.
 #define ALLOW_ALL_LITERALS 1	// CONFIGURATION - When enabled, backslash escapes for all of Markdown's literal characters will be removed when converting to rich text. Otherwise it's a minimal set (just for emphasis and escapes).
 
 #define ESCAPE_ALL_LITERALS 0	// CONFIGURATION - When ALLOW\_ALL\_LITERALS is enabled, ESCAPE\_ALL\_LITERALS converts all literals in rich text \(including punctuation\!\)\. You'll probably find this irritating\.
@@ -159,6 +160,19 @@ NSString *const codeStart = @"`";
 NSString *const codeEnd = @"`";
 #endif
 
+#if ALLOW_BULLETED_LISTS
+NSString *const listStart = @"- ";
+NSString *const altListStart = @"+ ";
+NSString *const altListStart2 = @"* ";
+
+NSString *const bulletLevel1 = @"•";
+NSString *const bulletLevel2 = @"◦";
+NSString *const bulletLevelGreaterThan2 = @"∙";
+
+NSString *const bulletFontName = @"HelveticaNeue-Medium";
+
+CGFloat const bulletIndentWidth = 20.0;
+#endif
 const unichar escapeCharacter = '\\';
 const unichar spaceCharacter = ' ';
 const unichar tabCharacter = '\t';
@@ -171,6 +185,7 @@ typedef enum {
     MarkdownSpanLinkInline,
     MarkdownSpanLinkAutomatic,
     MarkdownSpanCode, // not supported
+    MarkdownSpanListItem,
 } MarkdownSpanType;
 
 static BOOL hasCharacterRelative(NSString *string, NSRange range, NSInteger offset, unichar character)
@@ -369,6 +384,12 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
 					}
 
 					endRange = [scanString rangeOfString:endMarker options:options range:remainingRange];
+                    
+                    // handle list items at the end of the string
+                    if (spanType == MarkdownSpanListItem  && endRange.length == 0) {
+                        endRange = NSMakeRange(remainingRange.location + remainingRange.length, 1);
+                    }
+                    
 					if (endRange.length > 0) {
 						// found potential end marker
 
@@ -541,6 +562,58 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
 							NSCAssert(NO, @"Not implemented");
 #endif
 							break;
+                        case MarkdownSpanListItem: {
+#if ALLOW_BULLETED_LISTS
+                            // check characters prior to bullet marker for indent level (4 spaces per indent)
+                            NSUInteger spacesBeforeBullet = 0;
+                            if (beginRange.location > 0) {
+                                NSInteger position = beginRange.location - 1;
+                                NSRange checkCharacterRange = NSMakeRange(position, 1);
+                                while ([[scanString substringWithRange:checkCharacterRange] isEqualToString:@" "] && position > 0) {
+                                    position--;
+                                    spacesBeforeBullet++;
+                                    checkCharacterRange = NSMakeRange(position, 1);
+                                }
+                            }
+                            NSUInteger bulletLevel = spacesBeforeBullet / 4;
+                            
+                            NSString *bulletCharacter = nil;
+                            switch (bulletLevel) {
+                                case 0:
+                                    bulletCharacter = bulletLevel1;
+                                    break;
+                                case 1:
+                                    bulletCharacter = bulletLevel2;
+                                default:
+                                    bulletCharacter = bulletLevelGreaterThan2;
+                                    break;
+                            }
+                    
+                            UIFont *baseFont = [result attribute:NSFontAttributeName atIndex:(beginRange.location - mutationOffset) effectiveRange:NULL];
+                            UIFont *updatedBulletFont = [UIFont fontWithName:bulletFontName size:baseFont.pointSize];
+                            NSRange mutatedBeginRange = NSMakeRange(beginRange.location - mutationOffset - spacesBeforeBullet, beginRange.length + spacesBeforeBullet);
+                            [result replaceCharactersInRange:mutatedBeginRange withString:[NSString stringWithFormat:@"%@%@", bulletCharacter, @"\t"]];
+                            mutationOffset += spacesBeforeBullet;
+                            
+                            /*
+                             NSMutableAttributedString Bug? - apply bullet font adjustment AFTER replacing text or NSAttributedString will apply font
+                             change to beginning of list item text for mutationOffset # of characters
+                             */
+                            [result addAttribute:NSFontAttributeName value:updatedBulletFont range:NSMakeRange(mutatedBeginRange.location, 1)];
+                            
+                            NSRange listItemRangeWithBullet = NSMakeRange(mutatedBeginRange.location, endRange.location - mutatedBeginRange.location + endRange.length - mutationOffset - 1);
+                            NSMutableParagraphStyle *paragraphStyle = [[result attribute:NSParagraphStyleAttributeName atIndex:listItemRangeWithBullet.location effectiveRange:NULL] mutableCopy];
+                            CGFloat bulletIndent = bulletIndentWidth * bulletLevel;
+                            CGFloat bulletedTextIndent = bulletIndentWidth * (bulletLevel + 1);
+                            NSTextTab *firstTabStop = [[NSTextTab alloc] initWithTextAlignment:NSTextAlignmentLeft location:bulletedTextIndent options:@{}];
+                            paragraphStyle.tabStops = @[firstTabStop];
+                            [paragraphStyle setFirstLineHeadIndent:bulletIndent];
+                            [paragraphStyle setHeadIndent:bulletedTextIndent];
+                            [result addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:listItemRangeWithBullet];
+                            replaceMarkers = NO;
+#endif
+                            break;
+                        }
 					}
                      
 					if (replaceMarkers) {
@@ -667,6 +740,13 @@ static void removeEscapedCharacterSetInAttributedString(NSMutableAttributedStrin
 	updateAttributedString(result, emphasisSingleStart, nil, emphasisSingleEnd, MarkdownSpanEmphasisSingle, styleAttributes);
 #if ALLOW_ALTERNATES
 	updateAttributedString(result, emphasisSingleAlternateStart, nil, emphasisSingleAlternateEnd, MarkdownSpanEmphasisSingle, styleAttributes);
+#endif
+    
+#if ALLOW_BULLETED_LISTS
+    // replace -, *, or +, with • or ◦
+    updateAttributedString(result, listStart, nil, @"\n", MarkdownSpanListItem, styleAttributes);
+    updateAttributedString(result, altListStart, nil, @"\n", MarkdownSpanListItem, styleAttributes);
+    updateAttributedString(result, altListStart2, nil, @"\n", MarkdownSpanListItem, styleAttributes);
 #endif
 
 	// remove backslashes from any escaped markers that haven't already been converted
