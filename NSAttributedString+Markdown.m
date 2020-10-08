@@ -33,6 +33,7 @@
 #define ALLOW_LINKS 1			// CONFIGURATION - When enabled, inline and automatic links in Markdown will be converted to rich text attributes.
 #define ALLOW_ALTERNATES 1		// CONFIGURATION - When enabled, alternate Markdown such as * for single emphasis and __ for double will be converted.
 #define ALLOW_BULLETED_LISTS 1  // CONFIGURATION - When enabled, bulleted lists are supported using -, * ,or + with 4 spaces per indentation level.
+#define ALLOW_UNDERLINE 1       // CONFIGURATION - When enabled, ___ encapsulated straings will be underlined.
 #define ALLOW_ALL_LITERALS 1	// CONFIGURATION - When enabled, backslash escapes for all of Markdown's literal characters will be removed when converting to rich text. Otherwise it's a minimal set (just for emphasis and escapes).
 
 #define ESCAPE_ALL_LITERALS 0	// CONFIGURATION - When ALLOW\_ALL\_LITERALS is enabled, ESCAPE\_ALL\_LITERALS converts all literals in rich text \(including punctuation\!\)\. You'll probably find this irritating\.
@@ -122,6 +123,7 @@ NSString *const UTTypeMarkdown = @"net.daringfireball.markdown";
 MarkdownStyleKey MarkdownStyleEmphasisSingle = @"MarkdownStyleEmphasisSingle";
 MarkdownStyleKey MarkdownStyleEmphasisDouble = @"MarkdownStyleEmphasisDouble";
 MarkdownStyleKey MarkdownStyleEmphasisBoth = @"MarkdownStyleEmphasisBoth";
+MarkdownStyleKey MarkdownStyleUnderline = @"MarkdownStyleUnderline";
 
 MarkdownStyleKey MarkdownStyleLink = @"MarkdownStyleLink";
 
@@ -173,6 +175,12 @@ NSString *const bulletFontName = @"HelveticaNeue-Medium";
 
 CGFloat const bulletIndentWidth = 20.0;
 #endif
+
+#if ALLOW_UNDERLINE
+NSString *const underlineStart = @"___";
+NSString *const underlineEnd = @"___";
+#endif
+
 const unichar escapeCharacter = '\\';
 const unichar spaceCharacter = ' ';
 const unichar tabCharacter = '\t';
@@ -186,6 +194,7 @@ typedef enum {
     MarkdownSpanLinkAutomatic,
     MarkdownSpanCode, // not supported
     MarkdownSpanListItem,
+    MarkdownSpanUnderline,
 } MarkdownSpanType;
 
 static BOOL hasCharacterRelative(NSString *string, NSRange range, NSInteger offset, unichar character)
@@ -614,6 +623,15 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
 #endif
                             break;
                         }
+                        case MarkdownSpanUnderline: {
+#if ALLOW_UNDERLINE
+                            if (beginIndex != endIndex) { // leave ___ alone, the intent was probably not underline with zero width
+                                replaceStyleAttributes = YES;
+                                replaceMarkers = YES;
+                            }
+#endif
+                            break;
+                        }
 					}
                      
 					if (replaceMarkers) {
@@ -640,6 +658,9 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
 									addTrait(FONT_DESCRIPTOR_TRAIT_BOLD, result, mutatedTextRange);
 								}
 							}
+                            else if (spanType == MarkdownSpanUnderline) {
+                                [result addAttribute:NSUnderlineStyleAttributeName value:@(NSUnderlineStyleSingle) range:mutatedTextRange];
+                            }
 						}
 						
 						if (replacementAttributes) {
@@ -728,6 +749,11 @@ static void removeEscapedCharacterSetInAttributedString(NSMutableAttributedStrin
 	
 #if ALLOW_CODE_MARKERS
     updateAttributedString(result, codeStart, nil, codeEnd, MarkdownSpanCode, styleAttributes);
+#endif
+    
+#if ALLOW_UNDERLINE
+    // replace ___ with underline style attributes
+    updateAttributedString(result, underlineStart, nil, underlineEnd, MarkdownSpanUnderline, styleAttributes);
 #endif
 	
 	// replace ** and __ markers with bold font traits or MarkdownStyleEmphasisDouble style attributes
