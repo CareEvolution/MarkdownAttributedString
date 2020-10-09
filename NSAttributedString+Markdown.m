@@ -593,6 +593,7 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
                                     break;
                                 case 1:
                                     bulletCharacter = bulletLevel2;
+                                    break;
                                 default:
                                     bulletCharacter = bulletLevelGreaterThan2;
                                     break;
