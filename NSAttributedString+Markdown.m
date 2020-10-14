@@ -167,6 +167,8 @@ NSString *const listStart = @"- ";
 NSString *const altListStart = @"+ ";
 NSString *const altListStart2 = @"* ";
 
+NSUInteger const spacesPerBulletIndentLevel = 4;
+
 NSString *const bulletLevel1 = @"•";
 NSString *const bulletLevel2 = @"◦";
 NSString *const bulletLevelGreaterThan2 = @"∙";
@@ -474,12 +476,14 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
 								replaceMarkers = YES;
 							}
 							break;
-						case MarkdownSpanEmphasisDouble:
-							if (beginIndex != endIndex) { // leave ** and __ alone, the intent was probably not emphasis with zero width
-								replaceStyleAttributes = YES;
-								replaceMarkers = YES;
-							}
-							break;
+                        case MarkdownSpanEmphasisDouble:
+                        case MarkdownSpanUnderline: {
+                            if (beginIndex != endIndex) { // leave **, __ and ___ alone, the intent was probably not emphasis with zero width
+                                replaceStyleAttributes = YES;
+                                replaceMarkers = YES;
+                            }
+                            break;
+                        }
 						case MarkdownSpanLinkInline: {
 							NSString *linkText = nil;
 							NSString *inlineLink = nil;
@@ -590,7 +594,7 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
                                     break;
                                 }
                             }
-                            NSUInteger bulletLevel = spacesBeforeBullet / 4;
+                            NSUInteger bulletLevel = spacesBeforeBullet / spacesPerBulletIndentLevel;
                             
                             NSString *bulletCharacter = nil;
                             switch (bulletLevel) {
@@ -605,8 +609,8 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
                                     break;
                             }
                     
-                            UIFont *baseFont = [result attribute:NSFontAttributeName atIndex:(beginRange.location - mutationOffset) effectiveRange:NULL];
-                            UIFont *updatedBulletFont = [UIFont fontWithName:bulletFontName size:baseFont.pointSize];
+                            FONT_CLASS *baseFont = [result attribute:NSFontAttributeName atIndex:(beginRange.location - mutationOffset) effectiveRange:NULL];
+                            FONT_CLASS *updatedBulletFont = [FONT_CLASS fontWithName:bulletFontName size:baseFont.pointSize];
                             NSRange mutatedBeginRange = NSMakeRange(beginRange.location - mutationOffset - spacesBeforeBullet, beginRange.length + spacesBeforeBullet);
                             [result replaceCharactersInRange:mutatedBeginRange withString:[NSString stringWithFormat:@"%@%@", bulletCharacter, @"\t"]];
                             mutationOffset += spacesBeforeBullet;
@@ -618,7 +622,7 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
                             [result addAttribute:NSFontAttributeName value:updatedBulletFont range:NSMakeRange(mutatedBeginRange.location, 1)];
                             
                             NSRange listItemRangeWithBullet = NSMakeRange(mutatedBeginRange.location, endRange.location - mutatedBeginRange.location + endRange.length - mutationOffset - 1);
-                            NSMutableParagraphStyle *paragraphStyle = [[result attribute:NSParagraphStyleAttributeName atIndex:listItemRangeWithBullet.location effectiveRange:NULL] mutableCopy];
+                            NSMutableParagraphStyle *paragraphStyle = [[result attribute:NSParagraphStyleAttributeName atIndex:listItemRangeWithBullet.location effectiveRange:NULL] mutableCopy] ?: [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
                             CGFloat bulletIndent = bulletIndentWidth * bulletLevel;
                             CGFloat bulletedTextIndent = bulletIndentWidth * (bulletLevel + 1);
                             NSTextTab *firstTabStop = [[NSTextTab alloc] initWithTextAlignment:NSTextAlignmentLeft location:bulletedTextIndent options:@{}];
@@ -627,15 +631,6 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
                             [paragraphStyle setHeadIndent:bulletedTextIndent];
                             [result addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:listItemRangeWithBullet];
                             replaceMarkers = NO;
-#endif
-                            break;
-                        }
-                        case MarkdownSpanUnderline: {
-#if ALLOW_UNDERLINE
-                            if (beginIndex != endIndex) { // leave ___ alone, the intent was probably not underline with zero width
-                                replaceStyleAttributes = YES;
-                                replaceMarkers = YES;
-                            }
 #endif
                             break;
                         }
