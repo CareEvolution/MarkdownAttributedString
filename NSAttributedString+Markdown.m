@@ -588,7 +588,7 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
                                     checkCharacterRange = NSMakeRange(position, 1);
                                 }
                                 // verify character before bullet is either start of string or new line, otherwise could be a standard dash-space (e.g., "This - here - shouldn't create bullets")
-                                if (position > 0 && ![[scanString substringWithRange:NSMakeRange(position, 1)] isEqualToString:@"\n"]) {
+                                if (![[scanString substringWithRange:NSMakeRange(position, 1)] isEqualToString:@"\n"]) {
                                     // skip
                                     replaceMarkers = NO;
                                     break;
