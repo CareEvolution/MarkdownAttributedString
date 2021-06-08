@@ -175,7 +175,7 @@ NSString *const bulletLevelGreaterThan2 = @"∙";
 
 NSString *const bulletFontName = @"HelveticaNeue-Medium";
 
-CGFloat const bulletIndentWidth = 20.0;
+CGFloat const standardBulletIndentWidth = 20.0;
 #endif
 
 #if ALLOW_UNDERLINE
@@ -623,6 +623,7 @@ static void updateAttributedString(NSMutableAttributedString *result, NSString *
                             
                             NSRange listItemRangeWithBullet = NSMakeRange(mutatedBeginRange.location, endRange.location - mutatedBeginRange.location + endRange.length - mutationOffset - 1);
                             NSMutableParagraphStyle *paragraphStyle = [[result attribute:NSParagraphStyleAttributeName atIndex:listItemRangeWithBullet.location effectiveRange:NULL] mutableCopy] ?: [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
+                            CGFloat bulletIndentWidth = standardBulletIndentWidth * baseFont.pointSize / 17;
                             CGFloat bulletIndent = bulletIndentWidth * bulletLevel;
                             CGFloat bulletedTextIndent = bulletIndentWidth * (bulletLevel + 1);
                             NSTextTab *firstTabStop = [[NSTextTab alloc] initWithTextAlignment:NSTextAlignmentLeft location:bulletedTextIndent options:@{}];
